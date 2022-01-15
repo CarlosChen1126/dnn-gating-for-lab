@@ -92,10 +92,10 @@ class ResNet(nn.Module):
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1, **kwargs)
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2, **kwargs)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2, **kwargs)
-        self.linear = nn.Linear(64, num_classes)
+        self.linear = nn.Linear(64, num_classes, bias=False)
         self.relu = q.PactReLU() if kwargs['pact'] else nn.ReLU()
 
-        self.apply(_weights_init)
+        #self.apply(_weights_init)
 
     def _make_layer(self, block, planes, num_blocks, stride, **kwargs):
         strides = [stride] + [1]*(num_blocks-1)
@@ -121,20 +121,20 @@ def resnet20(num_classes=10, **kwargs):
     return ResNet(BasicBlock, [3, 3, 3], num_classes=num_classes, **kwargs)
 
 
-def resnet32():
-    return ResNet(BasicBlock, [5, 5, 5])
+def resnet32(num_classes=10, **kwargs):
+    return ResNet(BasicBlock, [5, 5, 5], num_classes=num_classes, **kwargs)
 
 
-def resnet44():
-    return ResNet(BasicBlock, [7, 7, 7])
+def resnet44(num_classes=10, **kwargs):
+    return ResNet(BasicBlock, [7, 7, 7], num_classes=num_classes, **kwargs)
 
 
-def resnet56():
-    return ResNet(BasicBlock, [9, 9, 9])
+def resnet56(num_classes=10, **kwargs):
+    return ResNet(BasicBlock, [9, 9, 9], num_classes=num_classes, **kwargs)
 
 
-def resnet110():
-    return ResNet(BasicBlock, [18, 18, 18])
+def resnet110(num_classes=10, **kwargs):
+    return ResNet(BasicBlock, [18, 18, 18], num_classes=num_classes, **kwargs)
 
 
 def resnet1202():

@@ -23,7 +23,7 @@ import utils.pg_utils as q
 # parameters 
 
 batch_size = 128
-num_epoch = 200
+num_epoch = 1
 _LAST_EPOCH = -1 #last_epoch arg is useful for restart
 _WEIGHT_DECAY = 1e-4
 _ARCH = "resnet-20"
@@ -53,6 +53,10 @@ parser.add_argument('--sparse_bp', '-spbp', action='store_true', help='sparse ba
 parser.add_argument('--ispg', '-pg', action='store_true', help='activate precision gating')
 parser.add_argument('--sigma', '-sg', type=float, default=0.001, help='the penalty factor')
 
+# add ADC effect & conductance variance
+parser.add_argument('--ADCprecision', type=int, default=5, help='ADC precision (e.g. 5-bit)')
+parser.add_argument('--vari', default=0,
+                    help='conductance variation (e.g. 0.1 standard deviation to generate random variation)')
 args = parser.parse_args()
 
 
@@ -105,8 +109,53 @@ def generate_model(model_arch):
             return m.resnet20(**kwargs)
         else:
             import model.quantized_cifar10_resnet as m
-            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact, \
+            'ADCprecision':args.ADCprecision, 'vari':args.vari}
             return m.resnet20(**kwargs)
+    elif model_arch == 'resnet-32':
+        if args.ispg:
+            import model.pg_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, \
+                      'pred_bits':args.pbits, 'sparse_bp':args.sparse_bp, \
+                      'pact':args.ispact}
+            return m.resnet32(**kwargs)
+        else:
+            import model.quantized_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            return m.resnet32(**kwargs)
+    elif model_arch == 'resnet-44':
+        if args.ispg:
+            import model.pg_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, \
+                      'pred_bits':args.pbits, 'sparse_bp':args.sparse_bp, \
+                      'pact':args.ispact}
+            return m.resnet44(**kwargs)
+        else:
+            import model.quantized_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            return m.resnet44(**kwargs)
+    elif model_arch == 'resnet-56':
+        if args.ispg:
+            import model.pg_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, \
+                      'pred_bits':args.pbits, 'sparse_bp':args.sparse_bp, \
+                      'pact':args.ispact}
+            return m.resnet56(**kwargs)
+        else:
+            import model.quantized_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            return m.resnet56(**kwargs)
+    elif model_arch == 'resnet-110':
+        if args.ispg:
+            import model.pg_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, \
+                      'pred_bits':args.pbits, 'sparse_bp':args.sparse_bp, \
+                      'pact':args.ispact}
+            return m.resnet110(**kwargs)
+        else:
+            import model.quantized_cifar10_resnet as m
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            return m.resnet110(**kwargs)
     else:
         raise NotImplementedError("Model architecture is not supported.")
 
