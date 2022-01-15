@@ -1,1 +1,1 @@
-python ../pg-cifar10.py -w 8 -a 3 -pb 2 -gtar 1 -spbp -gpu 0 --test --path 
+python ../pg-cifar10.py -w 8 -a 3 -pb 2 -gtar 1 -spbp -gpu 0 --test --path ../save_CIFAR10_model/model_resnet-20.pt > t.txt

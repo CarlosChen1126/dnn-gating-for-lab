@@ -50,13 +50,16 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
         self.conv1 = q.QuantizedConv2d(in_planes, planes, kernel_size=3, 
                                        stride=stride, padding=1, bias=False, 
-                                       wbits=kwargs['wbits'], abits=kwargs['abits'])
+                                       wbits=kwargs['wbits'], abits=kwargs['abits'], 
+                                       ADCprecision=kwargs['ADCprecision'], vari=kwargs['vari'])
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = q.QuantizedConv2d(planes, planes, kernel_size=3, 
                                        stride=1, padding=1, bias=False, 
-                                       wbits=kwargs['wbits'], abits=kwargs['abits'])
+                                       wbits=kwargs['wbits'], abits=kwargs['abits'],
+                                       ADCprecision=kwargs['ADCprecision'], vari=kwargs['vari'])
         self.bn2 = nn.BatchNorm2d(planes)
-        self.relu = q.PactReLU() if kwargs['pact'] else nn.ReLU()        
+        #self.relu = q.PactReLU() if kwargs['pact'] else nn.ReLU() 
+        self.relu = nn.ReLU()       
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
@@ -93,7 +96,8 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2, **kwargs)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2, **kwargs)
         self.linear = nn.Linear(64, num_classes, bias=False)
-        self.relu = q.PactReLU() if kwargs['pact'] else nn.ReLU()
+        self.relu = nn.ReLU() 
+        #self.relu = q.PactReLU() if kwargs['pact'] else nn.ReLU()
 
         #self.apply(_weights_init)
 

@@ -55,8 +55,7 @@ parser.add_argument('--sigma', '-sg', type=float, default=0.001, help='the penal
 
 # add ADC effect & conductance variance
 parser.add_argument('--ADCprecision', type=int, default=5, help='ADC precision (e.g. 5-bit)')
-parser.add_argument('--vari', default=0,
-                    help='conductance variation (e.g. 0.1 standard deviation to generate random variation)')
+parser.add_argument('--vari', default=0, help='conductance variation (e.g. 0.1 standard deviation to generate random variation)')
 args = parser.parse_args()
 
 

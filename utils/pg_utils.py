@@ -321,7 +321,8 @@ class QuantizedConv2d(nn.Conv2d):
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True,
-                 padding_mode='zeros', wbits=0, abits=0):
+                 padding_mode='zeros', wbits=0, abits=0,
+                 ADCprecision=5, vari=0):
         super(QuantizedConv2d, self).__init__(in_channels, out_channels, 
                                               kernel_size, stride, 
                                               padding, dilation, groups, 
@@ -330,6 +331,18 @@ class QuantizedConv2d(nn.Conv2d):
         self.quantize_a = TorchQuantize(abits)
         self.weight_rescale = \
             np.sqrt(1.0/(kernel_size**2 * in_channels)) if (wbits == 1) else 1.0
+        self.ADCprecision = ADCprecision
+    def LinearQuantizeOut(self, x, bit):
+        minQ = torch.min(x)
+        delta = torch.max(x) - torch.min(x)
+        y = x.clone()
+
+        stepSizeRatio = 2.**(-bit)
+        stepSize = stepSizeRatio*delta.item()
+        index = torch.clamp(torch.floor((x-minQ.item())/stepSize), 0, (2.**(bit)-1))
+        y = index*stepSize + minQ.item()
+
+        return y
 
     def forward(self, input):
         """ 
@@ -338,10 +351,12 @@ class QuantizedConv2d(nn.Conv2d):
         3. Rescale via McDonnell 2018 (https://arxiv.org/abs/1802.08530)
         4. perform convolution
         """
-        return F.conv2d(self.quantize_a(input),
+        out = F.conv2d(self.quantize_a(input),
                         self.quantize_w(self.weight) * self.weight_rescale,
                         self.bias, self.stride, self.padding, 
                         self.dilation, self.groups)
+        out = self.LinearQuantizeOut(out, self.ADCprecision)
+        return out
 
 class QuantizedLinear(nn.Linear):
     """ 
@@ -352,7 +367,7 @@ class QuantizedLinear(nn.Linear):
         self.quantize_w = TorchQuantize(wbits)
         self.quantize_a = TorchQuantize(abits)
         self.weight_rescale = np.sqrt(1.0/in_features) if (wbits == 1) else 1.0
-
+        
     def forward(self, input):
         """ 
         1. Quantize the input tensor
