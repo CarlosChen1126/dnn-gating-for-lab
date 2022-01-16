@@ -332,6 +332,125 @@ class QuantizedConv2d(nn.Conv2d):
         self.weight_rescale = \
             np.sqrt(1.0/(kernel_size**2 * in_channels)) if (wbits == 1) else 1.0
         self.ADCprecision = ADCprecision
+        self.vari = vari
+        self.subArray=128
+        self.bitWeight=8
+        self.cellBit=1
+        self.t=0
+        self.v=0
+        self.detect=0
+        self.target=0
+        self.onoffratio=10
+        self.bitActivation=8
+
+
+    def Retention(self, x, t, v, detect, target):
+        lower = torch.min(x).item()
+        upper = torch.max(x).item()
+        target = (torch.max(x).item() - torch.min(x).item())*target
+        if detect == 1: # need to define the sign of v 
+            sign = torch.zeros_like(x)
+            truncateX = (x+1)/2
+            truncateTarget = (target+1)/2
+            sign = torch.sign(torch.add(torch.zeros_like(x),truncateTarget)-truncateX)
+            ratio = t**(v*sign)
+        else :  # random generate target for each cell
+            sign = torch.randint_like(x, -1, 2)
+            truncateX = (x+1)/2
+            ratio = t**(v*sign)
+
+        return torch.clamp((2*truncateX*ratio-1), lower, upper)
+
+    def DeviceVariation(self, input, output):
+        upper=1
+        lower=1/self.onoffratio
+        cellRange=2**self.cellBit
+        weight=self.quantize_w(self.weight) * self.weight_rescale
+        dummyP = torch.zeros_like(weight)
+        dummyP[:, :, :, :] = (cellRange-1)*(upper+lower)/2
+        for i in range(self.weight.shape[2]):
+            for j in range(self.weight.shape[3]):
+                numSubArray = int(self.weight.shape[1]/self.subArray)
+                if numSubArray == 0:
+                    mask = torch.zeros_like(weight)
+                    mask[:, :, i, j] = 1
+                    if weight.shape[1] == 3:
+                        X_decimal = torch.round((2**self.bitWeight - 1)/2 * (weight+1) + 0)*mask
+                        outputP = torch.zeros_like(output)
+                        outputD = torch.zeros_like(output)    
+                        for k in range(int(self.bitWeight/self.cellBit)):
+                            remainder = torch.fmod(X_decimal, cellRange)*mask
+                            remainder = self.Retention(remainder, self.t, self.v, self.detect, self.target)
+                            X_decimal = torch.round((X_decimal-remainder)/cellRange)*mask
+                            remainderQ = (upper-lower) * (remainder-0)+(cellRange-1)*lower
+                            remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
+                            outputPartial = F.conv2d(input, remainderQ*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
+                            outputDummyPartial = F.conv2d(input, dummyP*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
+                            scaler = cellRange**k
+                            outputP = outputP + outputPartial * scaler*2/(1-1/self.onoffratio)
+                            outputD = outputD + outputDummyPartial * scaler*2/(1-1/self.onoffratio)
+                        outputP = outputP - outputD
+                        output = output + outputP
+                    else:
+                        inputQ = torch.round((2**self.bitActivation - 1)/1 * (input-0) + 0)
+                        outputIN = torch.zeros_like(output)
+                        for z in range(self.bitActivation):
+                            inputB = torch.fmod(inputQ, 2)
+                            inputQ = torch.round((inputQ-inputB)/2)
+                            outputP = torch.zeros_like(output)
+
+                            X_decimal = torch.round((2**self.bitWeight - 1)/2 * (weight+1) + 0)*mask
+                            outputD = torch.zeros_like(output)
+                            for k in range(int(self.bitWeight/self.cellBit)):
+                                remainder = torch.fmod(X_decimal, cellRange)*mask
+                                remainder = self.Retention(remainder, self.t, self.v, self.detect, self.target)
+                                X_decimal = torch.round((X_decimal-remainder)/cellRange)*mask
+                                remainderQ = (upper-lower) * (remainder-0)+(cellRange-1)*lower
+                                remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
+                                outputPartial = F.conv2d(inputB, remainderQ*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
+                                outputDummyPartial = F.conv2d(inputB, dummyP*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
+                                outputPartialQ = self.LinearQuantizeOut(outputPartial, self.ADCprecision)
+                                outputDummyPartialQ = self.LinearQuantizeOut(outputDummyPartial, self.ADCprecision)
+                                scaler = cellRange**k
+                                outputP = outputP + outputPartialQ * scaler*2/(1-1/self.onoffratio)
+                                outputD = outputD + outputDummyPartialQ * scaler*2/(1-1/self.onoffratio)
+                            scalerIN = 2**z
+                            outputIN = outputIN + (outputP - outputD)*scalerIN
+                        output = output + outputIN/(2**self.bitActivation)
+                else:
+                    inputQ = torch.round((2**self.bitActivation - 1)/1 * (input-0) + 0)
+                    outputIN = torch.zeros_like(output)
+                    for z in range(self.bitActivation):
+                        inputB = torch.fmod(inputQ, 2)
+                        inputQ = torch.round((inputQ-inputB)/2)
+                        outputP = torch.zeros_like(output)
+                        for s in range(self.subArray):
+                            mask = torch.zeros_like(weight)
+                            mask[:, (s*self.subArray):(s+1) * self.subArray, i, j] = 1
+                            X_decimal = torch.round((2**self.bitWeight - 1)/2 * (weight+1) + 0)*mask
+                            outputSP = torch.zeros_like(output)
+                            outputD = torch.zeros_like(output)
+                            for k in range(int(self.bitWeight/self.cellBit)):
+                                remainder = torch.fmod(X_decimal, cellRange)*mask
+                                remainder=self.Retention(remainder,self.t,self.v,self.detect,self.target)
+                                X_decimal=torch.round((X_decimal-remainder)/cellRange)*mask
+                                remainderQ = (upper-lower) * (remainder-0)+(cellRange-1)*lower
+                                remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
+                                outputPartial = F.conv2d(inputB, remainderQ*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
+                                outputDummyPartial = F.conv2d(inputB, dummyP*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
+                                outputPartialQ = self.LinearQuantizeOut(outputPartial, self.ADCprecision)
+                                outputDummyPartialQ = self.LinearQuantizeOut(outputDummyPartial, self.ADCprecision)
+                                scaler =cellRange**k
+                                outputSP = outputSP + outputPartialQ * scaler*2/(1-1/self.onoffratio)
+                                outputD = outputD + outputDummyPartialQ * scaler*2/(1-1/self.onoffratio)
+                            outputSP-=outputD
+                            outputP+=outputSP
+                        scalerIN =2**z
+                        outputIN+=outputP*scalerIN
+                    output+=outputIN/(2**self.bitActivation)
+        output/=2**self.bitWeight
+        return output
+
     def LinearQuantizeOut(self, x, bit):
         minQ = torch.min(x)
         delta = torch.max(x) - torch.min(x)
@@ -355,7 +474,8 @@ class QuantizedConv2d(nn.Conv2d):
                         self.quantize_w(self.weight) * self.weight_rescale,
                         self.bias, self.stride, self.padding, 
                         self.dilation, self.groups)
-        out = self.LinearQuantizeOut(out, self.ADCprecision)
+        #out = self.DeviceVariation(input,out)
+        #out = self.LinearQuantizeOut(out, self.ADCprecision)
         return out
 
 class QuantizedLinear(nn.Linear):

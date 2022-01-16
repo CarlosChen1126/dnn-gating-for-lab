@@ -1,0 +1,41 @@
+Available GPUs: 1
+Create resnet-20 model.
+@ Load trained model from ../save_CIFAR10_model/no_vari/model_resnet-20--ADC=10.pt.
+Loading the data.
+Files already downloaded and verified
+Files already downloaded and verified
+Mode: Test only.
+Accuracy of the network on the 10000 test images: 40.0 %
+Available GPUs: 1
+Create resnet-20 model.
+@ Load trained model from ../save_CIFAR10_model/model_resnet-20--ADC=9.pt.
+Loading the data.
+Files already downloaded and verified
+Files already downloaded and verified
+Mode: Test only.
+Accuracy of the network on the 10000 test images: 40.6 %
+Available GPUs: 1
+Create resnet-20 model.
+@ Load trained model from ../save_CIFAR10_model/model_resnet-20--ADC=8.pt.
+Loading the data.
+Files already downloaded and verified
+Files already downloaded and verified
+Mode: Test only.
+Accuracy of the network on the 10000 test images: 39.9 %
+Available GPUs: 1
+Create resnet-20 model.
+@ Load trained model from ../save_CIFAR10_model/model_resnet-20--ADC=7.pt.
+Loading the data.
+Files already downloaded and verified
+Files already downloaded and verified
+Mode: Test only.
+Accuracy of the network on the 10000 test images: 40.8 %
+Available GPUs: 1
+Create resnet-20 model.
+@ Load trained model from ../save_CIFAR10_model/no_vari/model_resnet-20--ADC=5.pt.
+Loading the data.
+Files already downloaded and verified
+Files already downloaded and verified
+Mode: Test only.
+Accuracy of the network on the 10000 test images: 39.9 %
+

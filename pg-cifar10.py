@@ -23,10 +23,10 @@ import utils.pg_utils as q
 # parameters 
 
 batch_size = 128
-num_epoch = 1
+num_epoch = 200
 _LAST_EPOCH = -1 #last_epoch arg is useful for restart
 _WEIGHT_DECAY = 1e-4
-_ARCH = "resnet-20"
+#_ARCH = "resnet-20"
 this_file_path = os.path.dirname(os.path.abspath(__file__))
 save_folder = os.path.join(this_file_path, 'save_CIFAR10_model')
 #########################
@@ -56,9 +56,10 @@ parser.add_argument('--sigma', '-sg', type=float, default=0.001, help='the penal
 # add ADC effect & conductance variance
 parser.add_argument('--ADCprecision', type=int, default=5, help='ADC precision (e.g. 5-bit)')
 parser.add_argument('--vari', default=0, help='conductance variation (e.g. 0.1 standard deviation to generate random variation)')
+parser.add_argument('--model', default="resnet-20")
 args = parser.parse_args()
 
-
+_ARCH=args.model
 #----------------------------
 # Load the CIFAR-10 dataset.
 #----------------------------
@@ -120,7 +121,8 @@ def generate_model(model_arch):
             return m.resnet32(**kwargs)
         else:
             import model.quantized_cifar10_resnet as m
-            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact, \
+            'ADCprecision':args.ADCprecision, 'vari':args.vari}
             return m.resnet32(**kwargs)
     elif model_arch == 'resnet-44':
         if args.ispg:
@@ -131,7 +133,8 @@ def generate_model(model_arch):
             return m.resnet44(**kwargs)
         else:
             import model.quantized_cifar10_resnet as m
-            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact, \
+            'ADCprecision':args.ADCprecision, 'vari':args.vari}
             return m.resnet44(**kwargs)
     elif model_arch == 'resnet-56':
         if args.ispg:
@@ -142,7 +145,8 @@ def generate_model(model_arch):
             return m.resnet56(**kwargs)
         else:
             import model.quantized_cifar10_resnet as m
-            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact,\
+            'ADCprecision':args.ADCprecision, 'vari':args.vari}
             return m.resnet56(**kwargs)
     elif model_arch == 'resnet-110':
         if args.ispg:
@@ -153,7 +157,8 @@ def generate_model(model_arch):
             return m.resnet110(**kwargs)
         else:
             import model.quantized_cifar10_resnet as m
-            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact}
+            kwargs = {'wbits':args.wbits, 'abits':args.abits, 'pact':args.ispact,\
+            'ADCprecision':args.ADCprecision, 'vari':args.vari}
             return m.resnet110(**kwargs)
     else:
         raise NotImplementedError("Model architecture is not supported.")
@@ -250,7 +255,7 @@ def train_model(trainloader, testloader, net, device):
     # save the model if required
     if args.save:
         print("Saving the trained model.")
-        util.save_models(net.state_dict(), save_folder, suffix=_ARCH)
+        util.save_models(net.state_dict(), save_folder, suffix=_ARCH+"--ADC="+str(args.ADCprecision))
 
     print('Finished Training')
 
@@ -333,7 +338,7 @@ def main():
 
     print("Create {} model.".format(_ARCH))
     net = generate_model(_ARCH)
-    #print(net)
+    print(net)
 
     if args.path:
         print("@ Load trained model from {}.".format(args.path))
