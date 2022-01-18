@@ -48,13 +48,13 @@ class BasicBlock(nn.Module):
 
     def __init__(self, in_planes, planes, stride=1, option='A', **kwargs):
         super(BasicBlock, self).__init__()
-        self.conv1 = q.QuantizedConv2d(in_planes, planes, kernel_size=3, 
-                                       stride=stride, padding=1, bias=False, 
+        self.conv1 = q.QuantizedConv2d(in_planes, planes, kernel_size=kwargs['kernel'], 
+                                       stride=stride, padding=kwargs['padding'], bias=False, 
                                        wbits=kwargs['wbits'], abits=kwargs['abits'], 
                                        ADCprecision=kwargs['ADCprecision'], vari=kwargs['vari'])
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = q.QuantizedConv2d(planes, planes, kernel_size=3, 
-                                       stride=1, padding=1, bias=False, 
+        self.conv2 = q.QuantizedConv2d(planes, planes, kernel_size=kwargs['kernel'], 
+                                       stride=1, padding=kwargs['padding'], bias=False, 
                                        wbits=kwargs['wbits'], abits=kwargs['abits'],
                                        ADCprecision=kwargs['ADCprecision'], vari=kwargs['vari'])
         self.bn2 = nn.BatchNorm2d(planes)
@@ -88,15 +88,16 @@ class BasicBlock(nn.Module):
 class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10, **kwargs):
         super(ResNet, self).__init__()
-        self.in_planes = 16
+        self.in_planes = kwargs['channel']
 
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=kwargs['kernel'], stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1, **kwargs)
-        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2, **kwargs)
-        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2, **kwargs)
-        self.linear = nn.Linear(64, num_classes, bias=False)
+        self.conv1 = nn.Conv2d(3, kwargs['channel'], kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(kwargs['channel'])
+        self.layer1 = self._make_layer(block, kwargs['channel'], num_blocks[0], stride=1, **kwargs)
+        self.layer2 = self._make_layer(block, kwargs['channel']*2, num_blocks[1], stride=2, **kwargs)
+        self.layer3 = self._make_layer(block, kwargs['channel']*4, num_blocks[2], stride=2, **kwargs)
+        self.linear = nn.Linear(kwargs['channel']*4, num_classes, bias=False)
         self.relu = nn.ReLU() 
+        self.ii=0
         #self.relu = q.PactReLU() if kwargs['pact'] else nn.ReLU()
 
         #self.apply(_weights_init)
@@ -114,6 +115,8 @@ class ResNet(nn.Module):
         out = self.relu(self.bn1(self.conv1(x)))
         #print(out.size())
         out = self.layer1(out)
+        # print(self.ii)
+        # self.ii+=1
         #print(out.size())
         out = self.layer2(out)
         #print(out.size())

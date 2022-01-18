@@ -330,18 +330,18 @@ class QuantizedConv2d(nn.Conv2d):
         self.quantize_w = TorchQuantize(wbits)
         self.quantize_a = TorchQuantize(abits)
         self.weight_rescale = \
-            np.sqrt(1.0/(kernel_size**2 * in_channels)) if (wbits == 1) else 1.0
+            np.sqrt(1.0/(3**2 * in_channels)) if (wbits == 1) else 1.0
         self.ADCprecision = ADCprecision
         self.vari = vari
         self.subArray=128
         self.bitWeight=8
-        self.cellBit=1
+        self.cellBit=4
         self.t=0
         self.v=0
         self.detect=0
         self.target=0
-        self.onoffratio=10
-        self.bitActivation=8
+        self.onoffratio=3
+        self.bitActivation=3
 
     #這兩個function是handle device variation的，但目前還沒成功執行
     def Retention(self, x, t, v, detect, target):
@@ -370,12 +370,14 @@ class QuantizedConv2d(nn.Conv2d):
         weight=self.quantize_w(self.weight) * self.weight_rescale
         dummyP = torch.zeros_like(weight)
         dummyP[:, :, :, :] = (cellRange-1)*(upper+lower)/2
+        #print(weight)
         #self.weight.shape[1]=16;self.weight.shape[2]=3;self.weight.shape[3]=3
         for i in range(self.weight.shape[2]):
+            #print(i)
             for j in range(self.weight.shape[3]):
-                numSubArray = int(self.weight.shape[1]/self.subArray)
+                numSubArray = int(weight.shape[1]/self.subArray)
                 if numSubArray == 0:
-                    print("0000000")
+                    #print("A")
                     mask = torch.zeros_like(weight)
                     mask[:, :, i, j] = 1
                     if weight.shape[1] == 3:
@@ -396,14 +398,14 @@ class QuantizedConv2d(nn.Conv2d):
                         outputP = outputP - outputD
                         output = output + outputP
                     else:
-                        print("AA")
+                        #print("B")
+                        #print("AA")
                         inputQ = torch.round((2**self.bitActivation - 1)/1 * (input-0) + 0)
                         outputIN = torch.zeros_like(output)
                         for z in range(self.bitActivation):
                             inputB = torch.fmod(inputQ, 2)
                             inputQ = torch.round((inputQ-inputB)/2)
                             outputP = torch.zeros_like(output)
-
                             X_decimal = torch.round((2**self.bitWeight - 1)/2 * (weight+1) + 0)*mask
                             outputD = torch.zeros_like(output)
                             #print(int(self.bitWeight/self.cellBit))
@@ -420,12 +422,13 @@ class QuantizedConv2d(nn.Conv2d):
                                 scaler = cellRange**k
                                 outputP = outputP + outputPartialQ * scaler*2/(1-1/self.onoffratio)
                                 outputD = outputD + outputDummyPartialQ * scaler*2/(1-1/self.onoffratio)
-                            print("tTTTTT")
+                            #print("tTTTTT")
                             scalerIN = 2**z
                             outputIN = outputIN + (outputP - outputD)*scalerIN
-                        print("LLLL")
+                        #print("LLLL")
                         output = output + outputIN/(2**self.bitActivation)
                 else:
+                    #print("C")
                     inputQ = torch.round((2**self.bitActivation - 1)/1 * (input-0) + 0)
                     outputIN = torch.zeros_like(output)
                     for z in range(self.bitActivation):
@@ -456,7 +459,7 @@ class QuantizedConv2d(nn.Conv2d):
                         scalerIN =2**z
                         outputIN+=outputP*scalerIN
                     output+=outputIN/(2**self.bitActivation)
-        print("===============================================")
+        #print("===============================================")
         output/=2**self.bitWeight
         return output
 
@@ -485,7 +488,8 @@ class QuantizedConv2d(nn.Conv2d):
                         self.bias, self.stride, self.padding, 
                         self.dilation, self.groups)
         #在跑inference之前要先檢查這邊
-        out = self.DeviceVariation(input,out)
+        #print(self.ADCprecision)
+        #out = self.DeviceVariation(input,out)
         out = self.LinearQuantizeOut(out, self.ADCprecision)
         return out
 
