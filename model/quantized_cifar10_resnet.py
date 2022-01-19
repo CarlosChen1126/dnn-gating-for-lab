@@ -113,19 +113,14 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         out = self.relu(self.bn1(self.conv1(x)))
-        #print(out.size())
         out = self.layer1(out)
         # print(self.ii)
         # self.ii+=1
-        #print(out.size())
         out = self.layer2(out)
-        #print(out.size())
         out = self.layer3(out)
-        #print(out.size())
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        #print(out.size())
         return out
 
 

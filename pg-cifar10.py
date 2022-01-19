@@ -258,7 +258,7 @@ def train_model(trainloader, testloader, net, device):
     # save the model if required
     if args.save:
         print("Saving the trained model.")
-        util.save_models(net.state_dict(), save_folder, suffix=_ARCH+"--channel="+str(args.channel))
+        util.save_models(net.state_dict(), save_folder, suffix=_ARCH+"resnt56=")
 
     print('Finished Training')
 

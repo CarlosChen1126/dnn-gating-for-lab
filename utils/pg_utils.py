@@ -254,7 +254,7 @@ class TorchRoundToBits(nn.Module):
         input = Clamp.apply( input/scaling ,0.0, 1.0 )
         """ round the mantessa bits to the required precision """
         input = Round.apply(input * (2.0**self.bits-1.0)) / (2.0**self.bits-1.0)
-        return input * scaling * sign
+        return input * sign, scaling
 
 class TorchTruncate(nn.Module):
     """ 
@@ -340,8 +340,8 @@ class QuantizedConv2d(nn.Conv2d):
         self.v=0
         self.detect=0
         self.target=0
-        self.onoffratio=3
-        self.bitActivation=3
+        self.onoffratio=1000
+        self.bitActivation=8
 
     #這兩個function是handle device variation的，但目前還沒成功執行
     def Retention(self, x, t, v, detect, target):
@@ -361,13 +361,21 @@ class QuantizedConv2d(nn.Conv2d):
 
         return torch.clamp((2*truncateX*ratio-1), lower, upper)
 
-    def DeviceVariation(self, input, output):
-        output=torch.zeros_like(output)
+    def DeviceVariation(self, input):
+        input, input_scaling = self.quantize_a(input)
+        weight, weight_scaling = self.quantize_w(self.weight)
+        outputOriginal = F.conv2d(input * input_scaling,
+                        weight * weight_scaling * self.weight_rescale,
+                        self.bias, self.stride, self.padding, 
+                        self.dilation, self.groups)
+        output=torch.zeros_like(outputOriginal)
+        del outputOriginal
+
         upper=1
         lower=1/self.onoffratio
         cellRange=2**self.cellBit
         
-        weight=self.quantize_w(self.weight) * self.weight_rescale
+        #weight=self.quantize_w(self.weight) * self.weight_rescale
         dummyP = torch.zeros_like(weight)
         dummyP[:, :, :, :] = (cellRange-1)*(upper+lower)/2
         #print(weight)
@@ -386,10 +394,10 @@ class QuantizedConv2d(nn.Conv2d):
                         outputD = torch.zeros_like(output)    
                         for k in range(int(self.bitWeight/self.cellBit)):
                             remainder = torch.fmod(X_decimal, cellRange)*mask
-                            remainder = self.Retention(remainder, self.t, self.v, self.detect, self.target)
+                            #remainder = self.Retention(remainder, self.t, self.v, self.detect, self.target)
                             X_decimal = torch.round((X_decimal-remainder)/cellRange)*mask
                             remainderQ = (upper-lower) * (remainder-0)+(cellRange-1)*lower
-                            remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
+                            #remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
                             outputPartial = F.conv2d(input, remainderQ*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
                             outputDummyPartial = F.conv2d(input, dummyP*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
                             scaler = cellRange**k
@@ -411,14 +419,14 @@ class QuantizedConv2d(nn.Conv2d):
                             #print(int(self.bitWeight/self.cellBit))
                             for k in range(int(self.bitWeight/self.cellBit)):
                                 remainder = torch.fmod(X_decimal, cellRange)*mask
-                                remainder = self.Retention(remainder, self.t, self.v, self.detect, self.target)
+                                #remainder = self.Retention(remainder, self.t, self.v, self.detect, self.target)
                                 X_decimal = torch.round((X_decimal-remainder)/cellRange)*mask
                                 remainderQ = (upper-lower) * (remainder-0)+(cellRange-1)*lower
-                                remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
+                                #remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
                                 outputPartial = F.conv2d(inputB, remainderQ*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
                                 outputDummyPartial = F.conv2d(inputB, dummyP*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
-                                outputPartialQ = self.LinearQuantizeOut(outputPartial, self.ADCprecision)
-                                outputDummyPartialQ = self.LinearQuantizeOut(outputDummyPartial, self.ADCprecision)
+                                outputPartialQ = outputPartial #self.LinearQuantizeOut(outputPartial, self.ADCprecision)
+                                outputDummyPartialQ = outputDummyPartial #self.LinearQuantizeOut(outputDummyPartial, self.ADCprecision)
                                 scaler = cellRange**k
                                 outputP = outputP + outputPartialQ * scaler*2/(1-1/self.onoffratio)
                                 outputD = outputD + outputDummyPartialQ * scaler*2/(1-1/self.onoffratio)
@@ -449,8 +457,8 @@ class QuantizedConv2d(nn.Conv2d):
                                 remainderQ = remainderQ + remainderQ * torch.normal(0., torch.full(remainderQ.size(), self.vari, device='cuda', dtype=torch.float))
                                 outputPartial = F.conv2d(inputB, remainderQ*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
                                 outputDummyPartial = F.conv2d(inputB, dummyP*mask, self.bias, self.stride, self.padding, self.dilation, self.groups)
-                                outputPartialQ = self.LinearQuantizeOut(outputPartial, self.ADCprecision)
-                                outputDummyPartialQ = self.LinearQuantizeOut(outputDummyPartial, self.ADCprecision)
+                                outputPartialQ = outputPartial #self.LinearQuantizeOut(outputPartial, self.ADCprecision)
+                                outputDummyPartialQ = outputDummyPartial #self.LinearQuantizeOut(outputDummyPartial, self.ADCprecision)
                                 scaler =cellRange**k
                                 outputSP = outputSP + outputPartialQ * scaler*2/(1-1/self.onoffratio)
                                 outputD = outputD + outputDummyPartialQ * scaler*2/(1-1/self.onoffratio)
@@ -461,6 +469,8 @@ class QuantizedConv2d(nn.Conv2d):
                     output+=outputIN/(2**self.bitActivation)
         #print("===============================================")
         output/=2**self.bitWeight
+        output *= input_scaling
+        output *= weight_scaling
         return output
 
     #這個是處理ADC quantized effect
@@ -483,14 +493,10 @@ class QuantizedConv2d(nn.Conv2d):
         3. Rescale via McDonnell 2018 (https://arxiv.org/abs/1802.08530)
         4. perform convolution
         """
-        out = F.conv2d(self.quantize_a(input),
-                        self.quantize_w(self.weight) * self.weight_rescale,
-                        self.bias, self.stride, self.padding, 
-                        self.dilation, self.groups)
+        #out = F.conv2d(self.quantize_a(input)[0] * self.quantize_a(input)[1], self.quantize_w(self.weight)[0] * self.quantize_w(self.weight)[1] * self.weight_rescale, self.bias, self.stride, self.padding, self.dilation, self.groups)
         #在跑inference之前要先檢查這邊
         #print(self.ADCprecision)
-        #out = self.DeviceVariation(input,out)
-        out = self.LinearQuantizeOut(out, self.ADCprecision)
+        out = self.DeviceVariation(input)
         return out
 
 class QuantizedLinear(nn.Linear):
